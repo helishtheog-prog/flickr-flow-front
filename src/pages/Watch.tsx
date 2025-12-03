@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, ThumbsUp, ThumbsDown, Share2, Download, MoreHorizontal, Bell } from 'lucide-react';
+import { ArrowLeft, ThumbsUp, ThumbsDown, Share2, Download, MoreHorizontal, Send } from 'lucide-react';
 import { Header } from '@/components/Header';
 import { VideoPlayer } from '@/components/VideoPlayer';
-import { VideoCard } from '@/components/VideoCard';
 import { Button } from '@/components/ui/button';
-import { api, Video, mockVideos } from '@/lib/api';
+import { Textarea } from '@/components/ui/textarea';
+import { api, Video, getVideoStreamUrl, getThumbnailUrl, formatRelativeTime } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
+import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 
 const formatViews = (views: number): string => {
@@ -24,9 +26,13 @@ const Watch = () => {
   const [relatedVideos, setRelatedVideos] = useState<Video[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
-  const [isSubscribed, setIsSubscribed] = useState(false);
   const [isLiked, setIsLiked] = useState(false);
   const [isDisliked, setIsDisliked] = useState(false);
+  const [comment, setComment] = useState('');
+  const [isSubmittingComment, setIsSubmittingComment] = useState(false);
+
+  const { isAuthenticated } = useAuth();
+  const { toast } = useToast();
 
   useEffect(() => {
     const fetchVideo = async () => {
@@ -37,20 +43,68 @@ const Watch = () => {
       
       // Get related videos (exclude current)
       const allVideos = await api.getVideos();
-      setRelatedVideos(allVideos.filter(v => v.id !== id).slice(0, 8));
+      setRelatedVideos(allVideos.filter(v => v.id !== Number(id)).slice(0, 8));
       setIsLoading(false);
     };
     fetchVideo();
   }, [id]);
 
-  const handleLike = () => {
-    setIsLiked(!isLiked);
-    if (isDisliked) setIsDisliked(false);
+  const handleLike = async () => {
+    if (!isAuthenticated) {
+      toast({
+        title: 'Login required',
+        description: 'Please login to like videos.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    if (!video) return;
+    
+    const result = await api.likeVideo(video.id);
+    if (result.success) {
+      setIsLiked(true);
+      setIsDisliked(false);
+      toast({ title: 'Video liked!' });
+    } else {
+      toast({
+        title: 'Already liked',
+        description: result.error,
+      });
+    }
   };
 
   const handleDislike = () => {
     setIsDisliked(!isDisliked);
     if (isLiked) setIsLiked(false);
+  };
+
+  const handleComment = async () => {
+    if (!isAuthenticated) {
+      toast({
+        title: 'Login required',
+        description: 'Please login to comment.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!comment.trim() || !video) return;
+
+    setIsSubmittingComment(true);
+    const result = await api.addComment(video.id, comment);
+    setIsSubmittingComment(false);
+
+    if (result.error) {
+      toast({
+        title: 'Failed to add comment',
+        description: result.error,
+        variant: 'destructive',
+      });
+    } else {
+      setComment('');
+      toast({ title: 'Comment added!' });
+    }
   };
 
   if (isLoading || !video) {
@@ -69,6 +123,11 @@ const Watch = () => {
       </div>
     );
   }
+
+  const uploaderName = video.uploader?.username || 'Unknown';
+  const uploaderInitial = uploaderName.charAt(0).toUpperCase();
+  const videoStreamUrl = getVideoStreamUrl(video.id);
+  const thumbnailUrl = getThumbnailUrl(video.thumbnail, video.id);
 
   return (
     <div className="min-h-screen bg-background">
@@ -90,9 +149,9 @@ const Watch = () => {
             <div className="lg:col-span-2 space-y-4">
               {/* Video Player */}
               <VideoPlayer
-                thumbnail={video.thumbnail}
+                thumbnail={thumbnailUrl}
                 title={video.title}
-                videoUrl={video.videoUrl}
+                videoUrl={videoStreamUrl}
               />
 
               {/* Video Info */}
@@ -105,33 +164,13 @@ const Watch = () => {
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   {/* Channel Info */}
                   <div className="flex items-center gap-3">
-                    <img
-                      src={video.channel.avatar}
-                      alt={video.channel.name}
-                      className="w-10 h-10 rounded-full object-cover"
-                    />
-                    <div>
-                      <h3 className="font-medium text-foreground">{video.channel.name}</h3>
-                      <p className="text-muted-foreground text-xs">1.2M subscribers</p>
+                    <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+                      <span className="text-primary font-medium">{uploaderInitial}</span>
                     </div>
-                    <Button
-                      onClick={() => setIsSubscribed(!isSubscribed)}
-                      className={cn(
-                        "ml-4 rounded-full",
-                        isSubscribed
-                          ? "bg-secondary text-secondary-foreground hover:bg-secondary/80"
-                          : "bg-primary text-primary-foreground hover:bg-primary/90"
-                      )}
-                    >
-                      {isSubscribed ? (
-                        <>
-                          <Bell className="w-4 h-4 mr-2" />
-                          Subscribed
-                        </>
-                      ) : (
-                        "Subscribe"
-                      )}
-                    </Button>
+                    <div>
+                      <h3 className="font-medium text-foreground">{uploaderName}</h3>
+                      <p className="text-muted-foreground text-xs">Channel</p>
+                    </div>
                   </div>
 
                   {/* Action Buttons */}
@@ -146,7 +185,7 @@ const Watch = () => {
                         )}
                       >
                         <ThumbsUp className={cn("w-4 h-4 mr-2", isLiked && "fill-current")} />
-                        12K
+                        Like
                       </Button>
                       <div className="w-px h-6 bg-border" />
                       <Button
@@ -164,10 +203,6 @@ const Watch = () => {
                       <Share2 className="w-4 h-4 mr-2" />
                       Share
                     </Button>
-                    <Button variant="secondary" className="rounded-full">
-                      <Download className="w-4 h-4 mr-2" />
-                      Download
-                    </Button>
                     <Button variant="secondary" size="icon" className="rounded-full">
                       <MoreHorizontal className="w-4 h-4" />
                     </Button>
@@ -179,7 +214,7 @@ const Watch = () => {
                   <div className="flex items-center gap-2 text-sm font-medium text-foreground mb-2">
                     <span>{formatViews(video.views)}</span>
                     <span>•</span>
-                    <span>{video.uploadedAt}</span>
+                    <span>{formatRelativeTime(video.createdAt)}</span>
                   </div>
                   <p
                     className={cn(
@@ -195,6 +230,39 @@ const Watch = () => {
                   >
                     {isDescriptionExpanded ? "Show less" : "Show more"}
                   </button>
+                </div>
+
+                {/* Comments Section */}
+                <div className="space-y-4">
+                  <h2 className="font-display font-semibold text-lg text-foreground">Comments</h2>
+                  
+                  {/* Add Comment */}
+                  <div className="flex gap-3">
+                    <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center shrink-0">
+                      <span className="text-muted-foreground text-sm">
+                        {isAuthenticated ? 'U' : '?'}
+                      </span>
+                    </div>
+                    <div className="flex-1 space-y-2">
+                      <Textarea
+                        placeholder={isAuthenticated ? "Add a comment..." : "Login to comment"}
+                        value={comment}
+                        onChange={(e) => setComment(e.target.value)}
+                        disabled={!isAuthenticated || isSubmittingComment}
+                        className="bg-secondary border-border focus:border-primary resize-none min-h-[80px]"
+                      />
+                      <div className="flex justify-end">
+                        <Button
+                          onClick={handleComment}
+                          disabled={!comment.trim() || !isAuthenticated || isSubmittingComment}
+                          className="bg-gradient-primary text-primary-foreground"
+                        >
+                          <Send className="w-4 h-4 mr-2" />
+                          Comment
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -214,23 +282,23 @@ const Watch = () => {
                   >
                     <div className="relative w-40 shrink-0 aspect-video rounded-lg overflow-hidden bg-card">
                       <img
-                        src={relatedVideo.thumbnail}
+                        src={getThumbnailUrl(relatedVideo.thumbnail, relatedVideo.id)}
                         alt={relatedVideo.title}
                         className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                        onError={(e) => {
+                          e.currentTarget.src = 'https://images.unsplash.com/photo-1611162616475-46b635cb6868?w=320&h=180&fit=crop';
+                        }}
                       />
-                      <div className="absolute bottom-1 right-1 bg-background/90 px-1.5 py-0.5 rounded text-xs font-medium text-foreground">
-                        {relatedVideo.duration}
-                      </div>
                     </div>
                     <div className="flex-1 min-w-0">
                       <h3 className="font-medium text-sm text-foreground line-clamp-2 group-hover:text-primary transition-colors">
                         {relatedVideo.title}
                       </h3>
                       <p className="text-muted-foreground text-xs mt-1">
-                        {relatedVideo.channel.name}
+                        {relatedVideo.uploader?.username || 'Unknown'}
                       </p>
                       <p className="text-muted-foreground text-xs">
-                        {formatViews(relatedVideo.views)} • {relatedVideo.uploadedAt}
+                        {formatViews(relatedVideo.views)} • {formatRelativeTime(relatedVideo.createdAt)}
                       </p>
                     </div>
                   </Link>

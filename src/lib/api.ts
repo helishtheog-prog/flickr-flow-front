@@ -1,18 +1,67 @@
-const API_BASE_URL = 'http://172.105.182.143';
+const API_BASE_URL = 'http://172.105.182.143:3000';
+
+// Token management
+export const getToken = (): string | null => {
+  return localStorage.getItem('auth_token');
+};
+
+export const setToken = (token: string): void => {
+  localStorage.setItem('auth_token', token);
+};
+
+export const removeToken = (): void => {
+  localStorage.removeItem('auth_token');
+};
+
+// Auth headers helper
+const authHeaders = (): HeadersInit => {
+  const token = getToken();
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+};
+
+// Types matching your backend models
+export interface User {
+  id: number;
+  username: string;
+  email: string;
+  role: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export interface Video {
-  id: string;
+  id: number;
   title: string;
-  description?: string;
-  thumbnail: string;
-  duration: string;
+  description: string | null;
+  filename: string;
+  thumbnail: string | null;
   views: number;
-  uploadedAt: string;
-  channel: {
-    name: string;
-    avatar: string;
+  userId: number;
+  createdAt: string;
+  updatedAt: string;
+  uploader?: {
+    id: number;
+    username: string;
+    email: string;
   };
-  videoUrl?: string;
+}
+
+export interface Comment {
+  id: number;
+  content: string;
+  VideoId: number;
+  UserId: number;
+  createdAt: string;
+  User?: User;
+}
+
+export interface Like {
+  id: number;
+  VideoId: number;
+  UserId: number;
 }
 
 export interface Category {
@@ -21,9 +70,84 @@ export interface Category {
   icon: string;
 }
 
-// API functions - these will connect to your backend
+// Helper to get video URLs
+export const getVideoStreamUrl = (videoId: number): string => {
+  return `${API_BASE_URL}/api/videos/${videoId}/stream`;
+};
+
+export const getThumbnailUrl = (thumbnail: string | null, videoId: number): string => {
+  if (thumbnail) {
+    return `${API_BASE_URL}/uploads/thumbnails/${thumbnail}`;
+  }
+  return `${API_BASE_URL}/uploads/thumbnails/${videoId}.png`;
+};
+
+// Format relative time
+export const formatRelativeTime = (dateString: string): string => {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffSecs = Math.floor(diffMs / 1000);
+  const diffMins = Math.floor(diffSecs / 60);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+  const diffWeeks = Math.floor(diffDays / 7);
+  const diffMonths = Math.floor(diffDays / 30);
+  const diffYears = Math.floor(diffDays / 365);
+
+  if (diffYears > 0) return `${diffYears} year${diffYears > 1 ? 's' : ''} ago`;
+  if (diffMonths > 0) return `${diffMonths} month${diffMonths > 1 ? 's' : ''} ago`;
+  if (diffWeeks > 0) return `${diffWeeks} week${diffWeeks > 1 ? 's' : ''} ago`;
+  if (diffDays > 0) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+  if (diffHours > 0) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+  if (diffMins > 0) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
+  return 'Just now';
+};
+
+// API functions
 export const api = {
-  // Fetch all videos
+  // Auth
+  async signup(username: string, email: string, password: string): Promise<{ token?: string; error?: string }> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/auth/signup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, email, password }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || data.message || 'Signup failed');
+      if (data.token) setToken(data.token);
+      return { token: data.token };
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : 'Signup failed' };
+    }
+  },
+
+  async login(email: string, password: string): Promise<{ token?: string; error?: string }> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || data.message || 'Login failed');
+      if (data.token) setToken(data.token);
+      return { token: data.token };
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : 'Login failed' };
+    }
+  },
+
+  logout(): void {
+    removeToken();
+  },
+
+  isAuthenticated(): boolean {
+    return !!getToken();
+  },
+
+  // Videos
   async getVideos(): Promise<Video[]> {
     try {
       const response = await fetch(`${API_BASE_URL}/api/videos`);
@@ -31,132 +155,106 @@ export const api = {
       return response.json();
     } catch (error) {
       console.error('Error fetching videos:', error);
-      return mockVideos;
+      return [];
     }
   },
 
-  // Fetch single video by ID
-  async getVideo(id: string): Promise<Video | null> {
+  async getVideo(id: string | number): Promise<Video | null> {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/videos/${id}`);
-      if (!response.ok) throw new Error('Failed to fetch video');
-      return response.json();
+      const videos = await this.getVideos();
+      return videos.find(v => v.id === Number(id)) || null;
     } catch (error) {
       console.error('Error fetching video:', error);
-      return mockVideos.find(v => v.id === id) || null;
+      return null;
     }
   },
 
-  // Search videos
   async searchVideos(query: string): Promise<Video[]> {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/videos/search?q=${encodeURIComponent(query)}`);
-      if (!response.ok) throw new Error('Failed to search videos');
-      return response.json();
+      const videos = await this.getVideos();
+      const lowerQuery = query.toLowerCase();
+      return videos.filter(v => 
+        v.title.toLowerCase().includes(lowerQuery) ||
+        v.description?.toLowerCase().includes(lowerQuery)
+      );
     } catch (error) {
       console.error('Error searching videos:', error);
-      return mockVideos.filter(v => 
-        v.title.toLowerCase().includes(query.toLowerCase())
-      );
+      return [];
     }
   },
 
-  // Get videos by category
-  async getVideosByCategory(categoryId: string): Promise<Video[]> {
+  async uploadVideo(formData: FormData): Promise<{ video?: Video; error?: string }> {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/videos/category/${categoryId}`);
-      if (!response.ok) throw new Error('Failed to fetch category videos');
+      const token = getToken();
+      if (!token) throw new Error('Please login to upload videos');
+      
+      const response = await fetch(`${API_BASE_URL}/api/videos/upload`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || data.message || 'Upload failed');
+      return { video: data.video };
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : 'Upload failed' };
+    }
+  },
+
+  // Comments
+  async getComments(videoId: number): Promise<Comment[]> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/comments/${videoId}`);
+      if (!response.ok) return [];
       return response.json();
     } catch (error) {
-      console.error('Error fetching category videos:', error);
-      return mockVideos;
+      console.error('Error fetching comments:', error);
+      return [];
+    }
+  },
+
+  async addComment(videoId: number, content: string): Promise<{ comment?: Comment; error?: string }> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/comments/${videoId}`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ content }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || data.message || 'Failed to add comment');
+      return { comment: data };
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : 'Failed to add comment' };
+    }
+  },
+
+  // Likes
+  async likeVideo(videoId: number): Promise<{ success: boolean; error?: string }> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/likes/${videoId}`, {
+        method: 'POST',
+        headers: authHeaders(),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || data.message || 'Failed to like video');
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Failed to like video' };
+    }
+  },
+
+  // Users/Channels
+  async getUser(id: number): Promise<{ user: User; videos: Video[] } | null> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/users/${id}`);
+      if (!response.ok) throw new Error('User not found');
+      return response.json();
+    } catch (error) {
+      console.error('Error fetching user:', error);
+      return null;
     }
   },
 };
-
-// Mock data for development/fallback
-export const mockVideos: Video[] = [
-  {
-    id: '1',
-    title: 'Building Modern Web Apps with React',
-    description: 'Learn how to build scalable web applications using React and modern tooling.',
-    thumbnail: 'https://images.unsplash.com/photo-1633356122544-f134324a6cee?w=640&h=360&fit=crop',
-    duration: '14:32',
-    views: 125000,
-    uploadedAt: '2 days ago',
-    channel: { name: 'TechMaster', avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop' },
-  },
-  {
-    id: '2',
-    title: 'The Art of Cinematic Photography',
-    description: 'Explore the techniques used by professional cinematographers.',
-    thumbnail: 'https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?w=640&h=360&fit=crop',
-    duration: '21:45',
-    views: 89000,
-    uploadedAt: '5 days ago',
-    channel: { name: 'FilmCraft', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop' },
-  },
-  {
-    id: '3',
-    title: 'Music Production Masterclass',
-    description: 'Create professional-quality music from your home studio.',
-    thumbnail: 'https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?w=640&h=360&fit=crop',
-    duration: '45:12',
-    views: 234000,
-    uploadedAt: '1 week ago',
-    channel: { name: 'BeatLab', avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop' },
-  },
-  {
-    id: '4',
-    title: 'Exploring the Mountains of Norway',
-    description: 'A breathtaking journey through the Scandinavian wilderness.',
-    thumbnail: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=640&h=360&fit=crop',
-    duration: '18:20',
-    views: 456000,
-    uploadedAt: '3 days ago',
-    channel: { name: 'Wanderlust', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&h=100&fit=crop' },
-  },
-  {
-    id: '5',
-    title: 'Startup Success Stories',
-    description: 'Interviews with founders who built billion-dollar companies.',
-    thumbnail: 'https://images.unsplash.com/photo-1553877522-43269d4ea984?w=640&h=360&fit=crop',
-    duration: '32:15',
-    views: 178000,
-    uploadedAt: '1 day ago',
-    channel: { name: 'Founders Hub', avatar: 'https://images.unsplash.com/photo-1599566150163-29194dcabd36?w=100&h=100&fit=crop' },
-  },
-  {
-    id: '6',
-    title: 'Advanced Machine Learning Concepts',
-    description: 'Deep dive into neural networks and AI architectures.',
-    thumbnail: 'https://images.unsplash.com/photo-1677442136019-21780ecad995?w=640&h=360&fit=crop',
-    duration: '52:30',
-    views: 312000,
-    uploadedAt: '4 days ago',
-    channel: { name: 'AI Academy', avatar: 'https://images.unsplash.com/photo-1568602471122-7832951cc4c5?w=100&h=100&fit=crop' },
-  },
-  {
-    id: '7',
-    title: 'Cooking Italian Cuisine at Home',
-    description: 'Master authentic Italian recipes with simple ingredients.',
-    thumbnail: 'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=640&h=360&fit=crop',
-    duration: '28:45',
-    views: 567000,
-    uploadedAt: '6 days ago',
-    channel: { name: 'Chef Marco', avatar: 'https://images.unsplash.com/photo-1577219491135-ce391730fb2c?w=100&h=100&fit=crop' },
-  },
-  {
-    id: '8',
-    title: 'Urban Street Photography Guide',
-    description: 'Capture the energy of city life through your lens.',
-    thumbnail: 'https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=640&h=360&fit=crop',
-    duration: '16:55',
-    views: 98000,
-    uploadedAt: '2 weeks ago',
-    channel: { name: 'StreetShots', avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&h=100&fit=crop' },
-  },
-];
 
 export const categories: Category[] = [
   { id: 'all', name: 'All', icon: 'Home' },
