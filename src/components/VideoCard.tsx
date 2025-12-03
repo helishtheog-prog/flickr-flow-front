@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Video } from '@/lib/api';
+import { Video, getThumbnailUrl, formatRelativeTime } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 interface VideoCardProps {
@@ -18,6 +18,11 @@ const formatViews = (views: number): string => {
 };
 
 export const VideoCard = ({ video, index = 0 }: VideoCardProps) => {
+  const thumbnailUrl = getThumbnailUrl(video.thumbnail, video.id);
+  const uploaderName = video.uploader?.username || 'Unknown';
+  const uploaderInitial = uploaderName.charAt(0).toUpperCase();
+  const uploadedAt = formatRelativeTime(video.createdAt);
+
   return (
     <Link
       to={`/watch/${video.id}`}
@@ -29,15 +34,15 @@ export const VideoCard = ({ video, index = 0 }: VideoCardProps) => {
       {/* Thumbnail */}
       <div className="relative aspect-video rounded-xl overflow-hidden bg-card mb-3">
         <img
-          src={video.thumbnail}
+          src={thumbnailUrl}
           alt={video.title}
           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
           loading="lazy"
+          onError={(e) => {
+            // Fallback to placeholder if thumbnail fails
+            e.currentTarget.src = 'https://images.unsplash.com/photo-1611162616475-46b635cb6868?w=640&h=360&fit=crop';
+          }}
         />
-        {/* Duration Badge */}
-        <div className="absolute bottom-2 right-2 bg-background/90 backdrop-blur-sm px-2 py-0.5 rounded text-xs font-medium text-foreground">
-          {video.duration}
-        </div>
         {/* Hover Overlay */}
         <div className="absolute inset-0 bg-gradient-to-t from-background/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
       </div>
@@ -45,11 +50,9 @@ export const VideoCard = ({ video, index = 0 }: VideoCardProps) => {
       {/* Info */}
       <div className="flex gap-3">
         {/* Channel Avatar */}
-        <img
-          src={video.channel.avatar}
-          alt={video.channel.name}
-          className="w-9 h-9 rounded-full object-cover shrink-0 ring-2 ring-transparent group-hover:ring-primary/50 transition-all duration-300"
-        />
+        <div className="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center shrink-0 ring-2 ring-transparent group-hover:ring-primary/50 transition-all duration-300">
+          <span className="text-primary font-medium text-sm">{uploaderInitial}</span>
+        </div>
         
         <div className="flex-1 min-w-0">
           {/* Title */}
@@ -59,12 +62,12 @@ export const VideoCard = ({ video, index = 0 }: VideoCardProps) => {
           
           {/* Channel Name */}
           <p className="text-muted-foreground text-xs mt-1 hover:text-foreground transition-colors">
-            {video.channel.name}
+            {uploaderName}
           </p>
           
           {/* Stats */}
           <p className="text-muted-foreground text-xs">
-            {formatViews(video.views)} • {video.uploadedAt}
+            {formatViews(video.views)} • {uploadedAt}
           </p>
         </div>
       </div>

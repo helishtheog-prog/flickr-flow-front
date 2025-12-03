@@ -1,8 +1,16 @@
 import { useState } from 'react';
-import { Search, Menu, Upload, Bell, User } from 'lucide-react';
+import { Search, Menu, Upload, Bell, User, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '@/context/AuthContext';
 
 interface HeaderProps {
   onMenuToggle: () => void;
@@ -12,6 +20,7 @@ interface HeaderProps {
 export const Header = ({ onMenuToggle, onSearch }: HeaderProps) => {
   const [searchQuery, setSearchQuery] = useState('');
   const navigate = useNavigate();
+  const { isAuthenticated, logout } = useAuth();
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -19,6 +28,11 @@ export const Header = ({ onMenuToggle, onSearch }: HeaderProps) => {
       onSearch?.(searchQuery);
       navigate(`/search?q=${encodeURIComponent(searchQuery)}`);
     }
+  };
+
+  const handleLogout = () => {
+    logout();
+    navigate('/');
   };
 
   return (
@@ -67,27 +81,57 @@ export const Header = ({ onMenuToggle, onSearch }: HeaderProps) => {
 
       {/* Right Actions */}
       <div className="flex items-center gap-2 flex-1 justify-end">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="text-foreground hover:bg-secondary hidden sm:flex"
-        >
-          <Upload className="h-5 w-5" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="text-foreground hover:bg-secondary hidden sm:flex"
-        >
-          <Bell className="h-5 w-5" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="text-foreground hover:bg-secondary rounded-full"
-        >
-          <User className="h-5 w-5" />
-        </Button>
+        {isAuthenticated ? (
+          <>
+            <Link to="/upload">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-foreground hover:bg-secondary hidden sm:flex"
+              >
+                <Upload className="h-5 w-5" />
+              </Button>
+            </Link>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-foreground hover:bg-secondary hidden sm:flex"
+            >
+              <Bell className="h-5 w-5" />
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-foreground hover:bg-secondary rounded-full"
+                >
+                  <User className="h-5 w-5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48 bg-card border-border">
+                <DropdownMenuItem className="text-foreground cursor-pointer">
+                  <User className="h-4 w-4 mr-2" />
+                  Profile
+                </DropdownMenuItem>
+                <DropdownMenuSeparator className="bg-border" />
+                <DropdownMenuItem
+                  onClick={handleLogout}
+                  className="text-destructive cursor-pointer"
+                >
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Log out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </>
+        ) : (
+          <Link to="/auth">
+            <Button className="bg-gradient-primary text-primary-foreground hover:opacity-90 rounded-full px-6">
+              Sign in
+            </Button>
+          </Link>
+        )}
       </div>
     </header>
   );

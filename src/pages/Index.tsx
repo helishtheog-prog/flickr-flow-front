@@ -14,9 +14,7 @@ const Index = () => {
   useEffect(() => {
     const fetchVideos = async () => {
       setIsLoading(true);
-      const data = activeCategory === 'all' 
-        ? await api.getVideos()
-        : await api.getVideosByCategory(activeCategory);
+      const data = await api.getVideos();
       setVideos(data);
       setIsLoading(false);
     };
@@ -61,7 +59,7 @@ const Index = () => {
         {/* Section Title */}
         <div className="mb-6">
           <h1 className="font-display font-bold text-2xl text-foreground">
-            {activeCategoryName === 'All' ? 'Recommended' : activeCategoryName}
+            {activeCategoryName === 'All' ? 'All Videos' : activeCategoryName}
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
             {isLoading ? 'Loading videos...' : `${videos.length} videos`}
