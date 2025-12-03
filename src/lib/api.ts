@@ -1,4 +1,5 @@
-const API_BASE_URL = 'http://172.105.182.143:3000';
+const API_BASE_URL = ''; // Use relative paths for proxy
+
 
 // Token management
 export const getToken = (): string | null => {
