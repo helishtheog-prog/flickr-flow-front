@@ -8,21 +8,23 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Upload as UploadIcon, Video, X, Loader2 } from 'lucide-react';
+import { ArrowLeft, Upload as UploadIcon, Video, X, Loader2, Image } from 'lucide-react';
 
 const Upload = () => {
   const [file, setFile] = useState<File | null>(null);
+  const [thumbnail, setThumbnail] = useState<File | null>(null);
+  const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const thumbnailInputRef = useRef<HTMLInputElement>(null);
   
   const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  // Redirect if not authenticated
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -51,11 +53,30 @@ const Upload = () => {
         return;
       }
       setFile(selectedFile);
-      // Auto-fill title from filename
       if (!title) {
         const fileName = selectedFile.name.replace(/\.[^/.]+$/, '');
         setTitle(fileName);
       }
+    }
+  };
+
+  const handleThumbnailSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0];
+    if (selectedFile) {
+      if (!selectedFile.type.startsWith('image/')) {
+        toast({
+          title: 'Invalid file type',
+          description: 'Please select an image file.',
+          variant: 'destructive',
+        });
+        return;
+      }
+      setThumbnail(selectedFile);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setThumbnailPreview(reader.result as string);
+      };
+      reader.readAsDataURL(selectedFile);
     }
   };
 
@@ -84,7 +105,6 @@ const Upload = () => {
     setIsUploading(true);
     setProgress(0);
 
-    // Simulate progress (real progress would need XMLHttpRequest)
     const progressInterval = setInterval(() => {
       setProgress(prev => Math.min(prev + 10, 90));
     }, 500);
@@ -93,6 +113,9 @@ const Upload = () => {
     formData.append('video', file);
     formData.append('title', title);
     formData.append('description', description);
+    if (thumbnail) {
+      formData.append('thumbnail', thumbnail);
+    }
 
     const result = await api.uploadVideo(formData);
     
@@ -119,7 +142,6 @@ const Upload = () => {
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-3xl mx-auto p-4 pt-8">
-        {/* Back link */}
         <Link
           to="/"
           className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground mb-8 transition-colors"
@@ -191,6 +213,73 @@ const Upload = () => {
                 </div>
               </div>
             )}
+          </div>
+
+          {/* Thumbnail Upload */}
+          <div className="space-y-2">
+            <Label className="text-foreground">Thumbnail (optional)</Label>
+            <div
+              onClick={() => thumbnailInputRef.current?.click()}
+              className={`
+                border-2 border-dashed rounded-xl p-4 cursor-pointer transition-all
+                ${thumbnail 
+                  ? 'border-primary bg-primary/5' 
+                  : 'border-border hover:border-primary/50 hover:bg-card'
+                }
+              `}
+            >
+              <input
+                ref={thumbnailInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleThumbnailSelect}
+                className="hidden"
+              />
+              
+              {thumbnailPreview ? (
+                <div className="flex items-center gap-4">
+                  <div className="relative w-32 aspect-video rounded-lg overflow-hidden bg-card shrink-0">
+                    <img
+                      src={thumbnailPreview}
+                      alt="Thumbnail preview"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-foreground truncate">{thumbnail?.name}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {thumbnail && (thumbnail.size / 1024).toFixed(1)} KB
+                    </p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setThumbnail(null);
+                      setThumbnailPreview(null);
+                    }}
+                    className="text-muted-foreground hover:text-destructive shrink-0"
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-secondary rounded-lg flex items-center justify-center shrink-0">
+                    <Image className="w-6 h-6 text-muted-foreground" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-foreground text-sm">
+                      Click to upload a custom thumbnail
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      JPG, PNG, WebP (16:9 recommended)
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Upload Progress */}
