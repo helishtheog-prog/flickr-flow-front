@@ -1,4 +1,5 @@
 import { Home, TrendingUp, Music, Gamepad2, Cpu, GraduationCap, Plane, Trophy, Clock, ThumbsUp, ListVideo } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { categories } from '@/lib/api';
 
@@ -65,7 +66,10 @@ export const Sidebar = ({ isOpen, activeCategory, onCategoryChange }: SidebarPro
         )} />
 
         {/* User Section */}
-        <button className="flex items-center gap-4 px-3 py-3 rounded-lg text-sidebar-foreground hover:bg-sidebar-accent/50 transition-all duration-200">
+        <Link
+          to="/watch-later"
+          className="flex items-center gap-4 px-3 py-3 rounded-lg text-sidebar-foreground hover:bg-sidebar-accent/50 transition-all duration-200"
+        >
           <Clock className="h-5 w-5 shrink-0" />
           <span className={cn(
             "font-medium text-sm whitespace-nowrap transition-opacity",
@@ -73,7 +77,7 @@ export const Sidebar = ({ isOpen, activeCategory, onCategoryChange }: SidebarPro
           )}>
             Watch Later
           </span>
-        </button>
+        </Link>
         <button className="flex items-center gap-4 px-3 py-3 rounded-lg text-sidebar-foreground hover:bg-sidebar-accent/50 transition-all duration-200">
           <ThumbsUp className="h-5 w-5 shrink-0" />
           <span className={cn(

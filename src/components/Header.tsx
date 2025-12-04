@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Search, Menu, Upload, Bell, User, LogOut } from 'lucide-react';
+import { Search, Menu, Upload, User, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -92,13 +92,6 @@ export const Header = ({ onMenuToggle, onSearch }: HeaderProps) => {
                 <Upload className="h-5 w-5" />
               </Button>
             </Link>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-foreground hover:bg-secondary hidden sm:flex"
-            >
-              <Bell className="h-5 w-5" />
-            </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button

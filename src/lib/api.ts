@@ -72,15 +72,17 @@ export interface Category {
 }
 
 // Helper to get video URLs
+const BACKEND_URL = 'http://172.105.182.143:3000';
+
 export const getVideoStreamUrl = (videoId: number): string => {
-  return `${API_BASE_URL}/api/videos/${videoId}/stream`;
+  return `${BACKEND_URL}/api/videos/${videoId}/stream`;
 };
 
 export const getThumbnailUrl = (thumbnail: string | null, videoId: number): string => {
   if (thumbnail) {
-    return `${API_BASE_URL}/uploads/thumbnails/${thumbnail}`;
+    return `${BACKEND_URL}/uploads/thumbnails/${thumbnail}`;
   }
-  return `${API_BASE_URL}/uploads/thumbnails/${videoId}.png`;
+  return `${BACKEND_URL}/uploads/thumbnails/${videoId}.png`;
 };
 
 // Format relative time
